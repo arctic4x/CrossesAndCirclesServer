@@ -99,14 +99,15 @@ class ClientWorker(socket: Socket, val clientName: String, val serverInteraction
     private fun in_signIn() {
         with(readerStream) {
             val login = readLine()
-            out_sendLoginResult(!serverInteraction.isExist(login))
+            out_sendLoginResult(login, !serverInteraction.isExist(login))
         }
     }
 
-    private fun out_sendLoginResult(isAccept: Boolean) {
+    private fun out_sendLoginResult(login: String, isAccept: Boolean) {
         with(writerStream) {
             println(OUT_SEND_LOGIN_RESULT)
             println(if (isAccept) ACCEPT else DECLINE)
+            println(login)
             flush()
         }
     }
