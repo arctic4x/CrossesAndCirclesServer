@@ -9,6 +9,7 @@ private const val IN_EXIT = "EXIT"
 private const val IN_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val IN_RESPONSE_ON_REQUEST_TO_PLAY = "RESPONSE_ON_REQUEST_TO_PLAY"
 private const val IN_READY_TO_PLAY = "READY_TO_PLAY"
+private const val IN_GET_CLIENTS_LIST = "GET_CLIENTS_LIST"
 
 private const val OUT_SEND_LOGIN_RESULT = "SEND_LOGIN_RESULT"
 private const val OUT_SEND_LIST_OF_CLIENT = "SEND_LIST_OF_CLIENT"
@@ -17,7 +18,7 @@ private const val OUT_SEND_CLIENT_REMOVED = "SEND_CLIENT_REMOVED"
 private const val OUT_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val OUT_CONNECT_PLAYER_TO_GAME = "CONNECT_PLAYER_TO_GAME"
 
-class ClientWorker(socket: Socket, val clientName: String, val serverInteraction: ServerInteraction) : Thread() {
+class ClientWorker(socket: Socket, var clientName: String, val serverInteraction: ServerInteraction) : Thread() {
     private val readerStream: BufferedReader
     private val writerStream: PrintWriter
 
@@ -56,105 +57,113 @@ class ClientWorker(socket: Socket, val clientName: String, val serverInteraction
                     IN_READY_TO_PLAY -> {
                         in_readyToPlay()
                     }
+                    IN_GET_CLIENTS_LIST -> {
+                        in_getClientsList()
+                    }
                 }
             }
 
-            serverInteraction.disconnected(clientName)
-            println("Client ${id} disconnected")
+            serverInteraction.notifyRemove(clientName)
+            println("Client ${clientName} disconnected")
         } catch (e: Exception) {
         }
     }
 
+    private fun in_getClientsList() {
+        println("Client ${clientName} in_getClientsList")
+        out_sendListOfClient()
+    }
+
     private fun in_readyToPlay() {
+        println("Client ${clientName} in_readyToPlay")
         with(readerStream) {
 
         }
     }
 
     private fun in_responseOnRequestToPlay() {
-        with(readerStream) {
-            val targetClient = readLine()
-            val response = readLine()
-            if (response==ACCEPT) {
-                opponent = targetClient
-                out_connectPlayerToGame()
-                serverInteraction.connectPlayerToGame(clientName)
-            } else {
-                serverInteraction.declineRequestToPlay(clientName)
-            }
+        println("Client ${clientName} in_responseOnRequestToPlay")
+        val targetClient = readerStream.readLine()
+        val response = readerStream.readLine()
+        if (response==ACCEPT) {
+            opponent = targetClient
+            out_connectPlayerToGame()
+            serverInteraction.connectPlayerToGame(clientName)
+        } else {
+            serverInteraction.declineRequestToPlay(clientName)
         }
     }
 
     private fun in_requestToPlay() {
-        with(readerStream) {
-            val targetClient = readLine()
-            out_requestToPlay(targetClient)
-        }
+        println("Client ${clientName} in_requestToPlay")
+        val targetClient = readerStream.readLine()
+        out_requestToPlay(targetClient)
     }
 
     private fun in_exit() {
+        println("Client ${clientName} in_exit")
         isRunning = false
     }
 
     private fun in_signIn() {
-        with(readerStream) {
-            val login = readLine()
-            out_sendLoginResult(login, !serverInteraction.isExist(login))
+        println("Client ${id} in_signIn")
+        val login = readerStream.readLine()
+        println("Client $login")
+        out_sendLoginResult(login, serverInteraction.isExist(login))
+    }
+
+    fun out_sendLoginResult(login: String, isExist: Boolean) {
+        println("Client ${id} out_sendLoginResult")
+        writerStream.println(OUT_SEND_LOGIN_RESULT)
+        writerStream.println(if (!isExist) ACCEPT else DECLINE)
+        writerStream.println(login)
+        writerStream.flush()
+
+        if (!isExist) {
+            clientName = login
+            serverInteraction.notifyAdd(clientName)
         }
     }
 
-    private fun out_sendLoginResult(login: String, isAccept: Boolean) {
-        with(writerStream) {
-            println(OUT_SEND_LOGIN_RESULT)
-            println(if (isAccept) ACCEPT else DECLINE)
-            println(login)
-            flush()
-        }
-    }
-
-    private fun out_sendListOfClient() {
-        val list = serverInteraction.getListOfClient()
+    fun out_sendListOfClient() {
+        println("Client ${clientName} out_sendListOfClient")
+        val list = serverInteraction.getListOfClient(clientName)
         val listOfClients = StringBuilder()
         list.forEach {
             if (it!=clientName)
                 listOfClients.append(it).append(" ")
         }
-        with(writerStream) {
-            println(OUT_SEND_LIST_OF_CLIENT)
-            println(listOfClients.trim())
-            flush()
-        }
+        if (list.isNotEmpty())
+        writerStream.println(OUT_SEND_LIST_OF_CLIENT)
+        writerStream.println(listOfClients.trim())
+        writerStream.flush()
     }
 
     fun out_sendConnectedClient(connectedClientName: String) {
-        with(writerStream) {
-            println(OUT_SEND_CLIENT_CONNECTED)
-            println(connectedClientName)
-            flush()
-        }
+        println("Client ${clientName} out_sendConnectedClient")
+        writerStream.println(OUT_SEND_CLIENT_CONNECTED)
+        writerStream.println(connectedClientName)
+        writerStream.flush()
     }
 
     fun out_sendRemovedClient(removedClientName: String) {
-        with(writerStream) {
-            println(OUT_SEND_CLIENT_REMOVED)
-            println(removedClientName)
-            flush()
-        }
+        println("Client ${clientName} out_sendRemovedClient")
+        writerStream.println(OUT_SEND_CLIENT_REMOVED)
+        writerStream.println(removedClientName)
+        writerStream.flush()
     }
 
-    private fun out_requestToPlay(requestingClientName: String) {
-        with(writerStream) {
-            println(OUT_REQUEST_TO_PLAY)
-            println(requestingClientName)
-            flush()
-        }
+    fun out_requestToPlay(requestingClientName: String) {
+        println("Client ${clientName} out_requestToPlay")
+        writerStream.println(OUT_REQUEST_TO_PLAY)
+        writerStream.println(requestingClientName)
+        writerStream.flush()
     }
 
-    private fun out_connectPlayerToGame() {
-        with(writerStream) {
-            println(OUT_CONNECT_PLAYER_TO_GAME)
-            flush()
-        }
+    fun out_connectPlayerToGame() {
+        println("Client ${clientName} out_connectPlayerToGame")
+        writerStream.println(OUT_CONNECT_PLAYER_TO_GAME)
+        writerStream.flush()
     }
 /*
     private fun loginResult() {
@@ -167,10 +176,11 @@ class ClientWorker(socket: Socket, val clientName: String, val serverInteraction
     }*/
 
     interface ServerInteraction {
-        fun disconnected(clientName: String)
         fun isExist(clientName: String): Boolean
-        fun getListOfClient(): ArrayList<String>
+        fun getListOfClient(clientName: String): ArrayList<String>
         fun connectPlayerToGame(opponent: String)
         fun declineRequestToPlay(clientName: String)
+        fun notifyRemove(clientName: String)
+        fun notifyAdd(clientName: String)
     }
 }
