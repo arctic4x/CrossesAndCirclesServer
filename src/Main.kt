@@ -27,12 +27,26 @@ class Main {
                 return list
             }
 
+            override fun sendRequestToPlay(from:String, targetName: String) {
+                clientThreadPool.forEach {
+                    if (it.clientName.equals(targetName)){
+                        it.out_requestToPlay(from)
+                        return
+                    }
+                }
+            }
+
             override fun connectPlayerToGame(opponent: String) {
                 TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
             }
 
-            override fun declineRequestToPlay(clientName: String) {
-                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+            override fun sendDeclineToRequest(from: String, targetName: String) {
+                clientThreadPool.forEach {
+                    if (targetName.equals(it.clientName)){
+                        it.out_declineRequstToPlay(from)
+                        return
+                    }
+                }
             }
 
             override fun notifyRemove(clientName: String) {
@@ -51,6 +65,15 @@ class Main {
                 clientThreadPool.forEach {
                     if (clientName!=it.clientName) {
                         it.out_sendConnectedClient(clientName)
+                    }
+                }
+            }
+
+            override fun sendReadyToPlay(from: String, targetName: String) {
+                clientThreadPool.forEach {
+                    if (targetName.equals(it.clientName)){
+                        it.out_connectPlayerToGame(from)
+                        return
                     }
                 }
             }

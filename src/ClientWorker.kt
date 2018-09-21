@@ -17,6 +17,7 @@ private const val OUT_SEND_CLIENT_CONNECTED = "SEND_CLIENT_CONNECTED"
 private const val OUT_SEND_CLIENT_REMOVED = "SEND_CLIENT_REMOVED"
 private const val OUT_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val OUT_CONNECT_PLAYER_TO_GAME = "CONNECT_PLAYER_TO_GAME"
+private const val OUT_DECLINE_REQUEST_TO_PLAY = "DECLINE_REQUEST_TO_PLAY"
 
 class ClientWorker(socket: Socket, var clientName: String, val serverInteraction: ServerInteraction) : Thread() {
     private val readerStream: BufferedReader
@@ -54,9 +55,9 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
                     IN_RESPONSE_ON_REQUEST_TO_PLAY -> {
                         in_responseOnRequestToPlay()
                     }
-                    IN_READY_TO_PLAY -> {
-                        in_readyToPlay()
-                    }
+//                    IN_READY_TO_PLAY -> {
+//                        in_readyToPlay()
+//                    }
                     IN_GET_CLIENTS_LIST -> {
                         in_getClientsList()
                     }
@@ -74,12 +75,11 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         out_sendListOfClient()
     }
 
-    private fun in_readyToPlay() {
-        println("Client ${clientName} in_readyToPlay")
-        with(readerStream) {
-
-        }
-    }
+//    private fun in_readyToPlay() {
+//        val opponentName = readerStream?.readLine()
+//        println("Client ${clientName} in_readyToPlay from $opponentName")
+//        serverInteraction.sendReadyToPlay(clientName, opponentName)
+//    }
 
     private fun in_responseOnRequestToPlay() {
         println("Client ${clientName} in_responseOnRequestToPlay")
@@ -87,17 +87,18 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         val response = readerStream.readLine()
         if (response==ACCEPT) {
             opponent = targetClient
-            out_connectPlayerToGame()
-            serverInteraction.connectPlayerToGame(clientName)
+            out_connectPlayerToGame(targetClient)
+            serverInteraction.sendReadyToPlay(clientName, targetClient)
         } else {
-            serverInteraction.declineRequestToPlay(clientName)
+            serverInteraction.sendDeclineToRequest(clientName, targetClient)
         }
     }
 
     private fun in_requestToPlay() {
-        println("Client ${clientName} in_requestToPlay")
         val targetClient = readerStream.readLine()
-        out_requestToPlay(targetClient)
+        println("Client ${clientName} in_requestToPlay to ${targetClient}")
+        serverInteraction.sendRequestToPlay(clientName, targetClient)
+        //out_requestToPlay(targetClient)
     }
 
     private fun in_exit() {
@@ -133,10 +134,12 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
             if (it!=clientName)
                 listOfClients.append(it).append(" ")
         }
-        if (list.isNotEmpty())
-        writerStream.println(OUT_SEND_LIST_OF_CLIENT)
-        writerStream.println(listOfClients.trim())
-        writerStream.flush()
+        val result = listOfClients.toString().trim()
+        if (result.isNotEmpty()) {
+            writerStream.println(OUT_SEND_LIST_OF_CLIENT)
+            writerStream.println(result)
+            writerStream.flush()
+        }
     }
 
     fun out_sendConnectedClient(connectedClientName: String) {
@@ -160,9 +163,17 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         writerStream.flush()
     }
 
-    fun out_connectPlayerToGame() {
+    fun out_connectPlayerToGame(opponent: String) {
         println("Client ${clientName} out_connectPlayerToGame")
         writerStream.println(OUT_CONNECT_PLAYER_TO_GAME)
+        writerStream.println(opponent)
+        writerStream.flush()
+    }
+
+    fun out_declineRequstToPlay(opponent: String) {
+        println("Client ${clientName} out_declineRequstToPlay")
+        writerStream.println(OUT_DECLINE_REQUEST_TO_PLAY)
+        writerStream.println(opponent)
         writerStream.flush()
     }
 /*
@@ -179,8 +190,10 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         fun isExist(clientName: String): Boolean
         fun getListOfClient(clientName: String): ArrayList<String>
         fun connectPlayerToGame(opponent: String)
-        fun declineRequestToPlay(clientName: String)
         fun notifyRemove(clientName: String)
         fun notifyAdd(clientName: String)
+        fun sendRequestToPlay(from: String, targetName: String)
+        fun sendDeclineToRequest(from: String, targetName: String)
+        fun sendReadyToPlay(from: String, targetName: String)
     }
 }
