@@ -18,6 +18,7 @@ private const val OUT_SEND_CLIENT_REMOVED = "SEND_CLIENT_REMOVED"
 private const val OUT_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val OUT_CONNECT_PLAYER_TO_GAME = "CONNECT_PLAYER_TO_GAME"
 private const val OUT_DECLINE_REQUEST_TO_PLAY = "DECLINE_REQUEST_TO_PLAY"
+private const val OUT_YOUR_TURN = "YOUR_TURN"
 
 class ClientWorker(socket: Socket, var clientName: String, val serverInteraction: ServerInteraction) : Thread() {
     private val readerStream: BufferedReader
@@ -175,6 +176,14 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         writerStream.println(OUT_DECLINE_REQUEST_TO_PLAY)
         writerStream.println(opponent)
         writerStream.flush()
+    }
+
+    fun out_yourTurn() {
+        println("Client ${clientName} out_yourTurn")
+        with(writerStream) {
+            println(OUT_YOUR_TURN)
+            flush()
+        }
     }
 /*
     private fun loginResult() {
