@@ -22,6 +22,7 @@ private const val OUT_CONNECT_PLAYER_TO_GAME = "CONNECT_PLAYER_TO_GAME"
 private const val OUT_DECLINE_REQUEST_TO_PLAY = "DECLINE_REQUEST_TO_PLAY"
 private const val OUT_SEND_ACTION = "SEND_ACTION"
 private const val OUT_YOUR_TURN = "YOUR_TURN"
+private const val OUT_END_OF_GAME = "END_OF_GAME"
 
 class ClientWorker(socket: Socket, var clientName: String, val serverInteraction: ServerInteraction) : Thread() {
     private val EMPTY = 0
@@ -40,6 +41,8 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
 
     var myFigure = EMPTY
 
+    var opponentClient: ClientWorker? = null
+
     init {
         println("Client ${id} connected to socket")
         readerStream = BufferedReader(InputStreamReader(socket.getInputStream()))
@@ -52,7 +55,7 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         try {
             while (isRunning) {
                 val command = readerStream.readLine()
-                if (command==null) isRunning = false
+                if (command == null) isRunning = false
 
                 println("Command: ${command}")
 
@@ -91,11 +94,24 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
     }
 
     private fun in_action() {
+        println("Client ${clientName} in_action")
         try {
             val position = Integer.parseInt(readerStream.readLine())
 
-            serverInteraction.makeAction(opponent, position)
+
+            fieldSpans[position] = myFigure
+            opponentClient!!.fieldSpans[position] = myFigure
+
+            opponentClient?.out_sendAction(myFigure, position)
             out_sendAction(myFigure, position)
+
+            checkOnWin({ figure, index1, index2 ->
+                out_endOfGame(true, index1, index2)
+                opponentClient?.out_endOfGame(false, index1, index2)
+            }, {
+                opponentClient?.out_youtTurn()
+            })
+            //serverInteraction.makeAction(opponent, position)
         } catch (e: NumberFormatException) {
             e.printStackTrace()
         }
@@ -104,7 +120,23 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
     private fun in_imReady() {
         println("Client ${clientName} in_imReady")
         imReady = true
-        serverInteraction.opponentIsReady(opponent)
+
+        if (opponentClient != null && opponentClient!!.imReady) {
+            if (Math.random() > 0.5) {
+                myFigure = CROSS
+                opponentClient?.myFigure = CIRCLE
+                //serverInteraction.opponentFigure(opponent, CIRCLE)
+                out_youtTurn()
+            } else {
+                myFigure = CIRCLE
+                opponentClient?.myFigure = CROSS
+                opponentClient?.out_youtTurn()
+                //serverInteraction.opponentFigure(opponent, CROSS)
+                //serverInteraction.opponentTurn(opponent)
+            }
+        }
+
+        //serverInteraction.opponentIsReady(opponent)
     }
 
     private fun in_getClientsList() {
@@ -122,10 +154,14 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         println("Client ${clientName} in_responseOnRequestToPlay")
         val targetClient = readerStream.readLine()
         val response = readerStream.readLine()
-        if (response==ACCEPT) {
+        if (response == ACCEPT) {
             opponent = targetClient
+            opponentClient = serverInteraction.getOpponent(targetClient)
+            opponentClient?.opponentClient = this
+
             out_connectPlayerToGame(targetClient)
-            serverInteraction.sendReadyToPlay(clientName, targetClient)
+            opponentClient?.out_connectPlayerToGame(clientName)
+            //serverInteraction.sendReadyToPlay(clientName, targetClient)
         } else {
             serverInteraction.sendDeclineToRequest(clientName, targetClient)
         }
@@ -168,7 +204,7 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         val list = serverInteraction.getListOfClient(clientName)
         val listOfClients = StringBuilder()
         list.forEach {
-            if (it!=clientName)
+            if (it != clientName)
                 listOfClients.append(it).append(" ")
         }
         val result = listOfClients.toString().trim()
@@ -217,8 +253,6 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
     fun out_sendAction(figure: Int, position: Int) {
         println("Client ${clientName} out_sendAction")
 
-        fieldSpans[position] = figure
-
         writerStream.println(OUT_SEND_ACTION)
         writerStream.println(figure)
         writerStream.println(position)
@@ -246,6 +280,14 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         writerStream.flush()
     }
 
+    fun out_endOfGame(isWin: Boolean, index1: Int, index2: Int) {
+        println("Client ${clientName} out_endOfGame $index1 $index2")
+        writerStream.println(OUT_END_OF_GAME)
+        writerStream.println(isWin)
+        writerStream.println(index1)
+        writerStream.println(index2)
+        writerStream.flush()
+    }
 /*
     private fun loginResult() {
         with(readerStream) {
@@ -256,30 +298,38 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         }
     }*/
 
-    private fun checkOnWin() {
+    //fun out_
+
+    private fun checkOnWin(onWin: (figure: Int, index1: Int, index2: Int) -> Unit, onContinue: () -> Unit) {
         for (i in 0 until 3) {
             val j = i * 3
-            if (fieldSpans[j]!=EMPTY && fieldSpans[j]==fieldSpans[j + 1] && fieldSpans[j]==fieldSpans[j + 2]) {
+            if (fieldSpans[j] != EMPTY && fieldSpans[j] == fieldSpans[j + 1] && fieldSpans[j] == fieldSpans[j + 2]) {
+                onWin(fieldSpans[j], j, j + 2)
 //                finish(fieldSpans[j])
 //                drawWinLine(j, j+2)
                 return
             }
-            if (fieldSpans[i]!=EMPTY && fieldSpans[i]==fieldSpans[i + 3] && fieldSpans[i]==fieldSpans[i + 6]) {
+            if (fieldSpans[i] != EMPTY && fieldSpans[i] == fieldSpans[i + 3] && fieldSpans[i] == fieldSpans[i + 6]) {
+                onWin(fieldSpans[i], i, i + 6)
 //                finish(fieldSpans[i])
 //                drawWinLine(i, i+6)
                 return
             }
         }
-        if (fieldSpans[0]!=EMPTY && fieldSpans[0]==fieldSpans[4] && fieldSpans[0]==fieldSpans[8]) {
+        if (fieldSpans[0] != EMPTY && fieldSpans[0] == fieldSpans[4] && fieldSpans[0] == fieldSpans[8]) {
+            onWin(fieldSpans[0], 0, 8)
 //            finish(fieldSpans[0])
 //            drawWinLine(0, 8)
             return
         }
-        if (fieldSpans[2]!=EMPTY && fieldSpans[2]==fieldSpans[4] && fieldSpans[2]==fieldSpans[6]) {
+        if (fieldSpans[2] != EMPTY && fieldSpans[2] == fieldSpans[4] && fieldSpans[2] == fieldSpans[6]) {
+            onWin(fieldSpans[2], 2, 6)
 //            finish(fieldSpans[2])
 //            drawWinLine(2, 6)
             return
         }
+
+        onContinue()
     }
 
     interface ServerInteraction {
