@@ -27,9 +27,9 @@ class Main {
                 return list
             }
 
-            override fun sendRequestToPlay(from:String, targetName: String) {
+            override fun sendRequestToPlay(from: String, targetName: String) {
                 clientThreadPool.forEach {
-                    if (it.clientName.equals(targetName)){
+                    if (it.clientName.equals(targetName)) {
                         it.out_requestToPlay(from)
                         return
                     }
@@ -37,12 +37,12 @@ class Main {
             }
 
             override fun connectPlayerToGame(opponent: String) {
-                TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+
             }
 
             override fun sendDeclineToRequest(from: String, targetName: String) {
                 clientThreadPool.forEach {
-                    if (targetName.equals(it.clientName)){
+                    if (targetName.equals(it.clientName)) {
                         it.out_declineRequstToPlay(from)
                         return
                     }
@@ -71,11 +71,56 @@ class Main {
 
             override fun sendReadyToPlay(from: String, targetName: String) {
                 clientThreadPool.forEach {
-                    if (targetName.equals(it.clientName)){
+                    if (targetName.equals(it.clientName)) {
                         it.out_connectPlayerToGame(from)
                         return
                     }
                 }
+            }
+
+            override fun makeAction(opponent: String, position: Int) {
+                clientThreadPool.forEach {
+                    if (opponent.equals(it.clientName)) {
+                        it.out_sendAction(it.myFigure, position)
+                        return
+                    }
+                }
+            }
+
+            override fun opponentIsReady(opponent: String) {
+                clientThreadPool.forEach {
+                    if (opponent.contains(it.clientName)) {
+                        it.opponentIsReady()
+                        return
+                    }
+                }
+            }
+
+            override fun opponentTurn(opponent: String) {
+                clientThreadPool.forEach {
+                    if (opponent.equals(it.clientName)) {
+                        it.out_youtTurn()
+                        return
+                    }
+                }
+            }
+
+            override fun opponentFigure(opponent: String, figure: Int) {
+                clientThreadPool.forEach {
+                    if (opponent.equals(it.clientName)) {
+                        it.myFigure = figure
+                        return
+                    }
+                }
+            }
+
+            override fun getOpponent(opponent: String): ClientWorker? {
+                clientThreadPool.forEach {
+                    if (opponent.equals(it.clientName)) {
+                        return it
+                    }
+                }
+                return null
             }
         }
 

@@ -10,6 +10,8 @@ private const val IN_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val IN_RESPONSE_ON_REQUEST_TO_PLAY = "RESPONSE_ON_REQUEST_TO_PLAY"
 private const val IN_READY_TO_PLAY = "READY_TO_PLAY"
 private const val IN_GET_CLIENTS_LIST = "GET_CLIENTS_LIST"
+private const val IN_IM_READY = "IM_READY"
+private const val IN_ACTION = "ACTION"
 
 private const val OUT_SEND_LOGIN_RESULT = "SEND_LOGIN_RESULT"
 private const val OUT_SEND_LIST_OF_CLIENT = "SEND_LIST_OF_CLIENT"
@@ -18,13 +20,25 @@ private const val OUT_SEND_CLIENT_REMOVED = "SEND_CLIENT_REMOVED"
 private const val OUT_REQUEST_TO_PLAY = "REQUEST_TO_PLAY"
 private const val OUT_CONNECT_PLAYER_TO_GAME = "CONNECT_PLAYER_TO_GAME"
 private const val OUT_DECLINE_REQUEST_TO_PLAY = "DECLINE_REQUEST_TO_PLAY"
+private const val OUT_SEND_ACTION = "SEND_ACTION"
+private const val OUT_YOUR_TURN = "YOUR_TURN"
 
 class ClientWorker(socket: Socket, var clientName: String, val serverInteraction: ServerInteraction) : Thread() {
+    private val EMPTY = 0
+    private val CROSS = 1
+    private val CIRCLE = 2
+
+    private var fieldSpans = arrayOf(EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY)
+
     private val readerStream: BufferedReader
     private val writerStream: PrintWriter
 
     private var isRunning = true
     private var opponent = ""
+
+    private var imReady = false
+
+    var myFigure = EMPTY
 
     init {
         println("Client ${id} connected to socket")
@@ -61,6 +75,12 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
                     IN_GET_CLIENTS_LIST -> {
                         in_getClientsList()
                     }
+                    IN_IM_READY -> {
+                        in_imReady()
+                    }
+                    IN_ACTION -> {
+                        in_action()
+                    }
                 }
             }
 
@@ -68,6 +88,23 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
             println("Client ${clientName} disconnected")
         } catch (e: Exception) {
         }
+    }
+
+    private fun in_action() {
+        try {
+            val position = Integer.parseInt(readerStream.readLine())
+
+            serverInteraction.makeAction(opponent, position)
+            out_sendAction(myFigure, position)
+        } catch (e: NumberFormatException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun in_imReady() {
+        println("Client ${clientName} in_imReady")
+        imReady = true
+        serverInteraction.opponentIsReady(opponent)
     }
 
     private fun in_getClientsList() {
@@ -176,6 +213,39 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         writerStream.println(opponent)
         writerStream.flush()
     }
+
+    fun out_sendAction(figure: Int, position: Int) {
+        println("Client ${clientName} out_sendAction")
+
+        fieldSpans[position] = figure
+
+        writerStream.println(OUT_SEND_ACTION)
+        writerStream.println(figure)
+        writerStream.println(position)
+        writerStream.flush()
+    }
+
+    fun opponentIsReady() {
+        println("opponentIsReady im ready: $imReady")
+        if (imReady) {
+            if (Math.random() > 0.5) {
+                myFigure = CROSS
+                serverInteraction.opponentFigure(opponent, CIRCLE)
+                out_youtTurn()
+            } else {
+                myFigure = CIRCLE
+                serverInteraction.opponentFigure(opponent, CROSS)
+                serverInteraction.opponentTurn(opponent)
+            }
+        }
+    }
+
+    fun out_youtTurn() {
+        println("Client ${clientName} out_youtTurn")
+        writerStream.println(OUT_YOUR_TURN)
+        writerStream.flush()
+    }
+
 /*
     private fun loginResult() {
         with(readerStream) {
@@ -186,7 +256,35 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         }
     }*/
 
+    private fun checkOnWin() {
+        for (i in 0 until 3) {
+            val j = i * 3
+            if (fieldSpans[j]!=EMPTY && fieldSpans[j]==fieldSpans[j + 1] && fieldSpans[j]==fieldSpans[j + 2]) {
+//                finish(fieldSpans[j])
+//                drawWinLine(j, j+2)
+                return
+            }
+            if (fieldSpans[i]!=EMPTY && fieldSpans[i]==fieldSpans[i + 3] && fieldSpans[i]==fieldSpans[i + 6]) {
+//                finish(fieldSpans[i])
+//                drawWinLine(i, i+6)
+                return
+            }
+        }
+        if (fieldSpans[0]!=EMPTY && fieldSpans[0]==fieldSpans[4] && fieldSpans[0]==fieldSpans[8]) {
+//            finish(fieldSpans[0])
+//            drawWinLine(0, 8)
+            return
+        }
+        if (fieldSpans[2]!=EMPTY && fieldSpans[2]==fieldSpans[4] && fieldSpans[2]==fieldSpans[6]) {
+//            finish(fieldSpans[2])
+//            drawWinLine(2, 6)
+            return
+        }
+    }
+
     interface ServerInteraction {
+        fun getOpponent(opponent: String): ClientWorker?
+        fun makeAction(opponent: String, position: Int)
         fun isExist(clientName: String): Boolean
         fun getListOfClient(clientName: String): ArrayList<String>
         fun connectPlayerToGame(opponent: String)
@@ -195,5 +293,8 @@ class ClientWorker(socket: Socket, var clientName: String, val serverInteraction
         fun sendRequestToPlay(from: String, targetName: String)
         fun sendDeclineToRequest(from: String, targetName: String)
         fun sendReadyToPlay(from: String, targetName: String)
+        fun opponentIsReady(opponent: String)
+        fun opponentTurn(opponent: String)
+        fun opponentFigure(opponent: String, figure: Int)
     }
 }
